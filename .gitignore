@@ -1,5 +1,7 @@
-/*
+*
+*
 
-!src/
+!src/**/*.asm
+!src/**/*.bat
 !.gitignore
 !README.md
