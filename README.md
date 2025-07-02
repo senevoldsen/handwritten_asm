@@ -21,3 +21,9 @@ command line input.
 Does not include live compilation.
 
 Location: src/win64/itc_collatz
+
+## itc_collatz_reg
+
+Similar to `itc_collatz` but uses a register for top of data stack.
+
+Location: src/win64/itc_collatz_reg

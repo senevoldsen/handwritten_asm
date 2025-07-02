@@ -1,27 +1,12 @@
-;;; Demonstration of ITC (indirect threaded code)
-;;; The core inner interpreter in macro itc_next
-;;;
-;;; Here we just use it to print the collatz sequence
-;;;
-;;; The CFA of each word is thus an address to machine code
-;;; For code words it points to the first instruction which is
-;;; at the address location right after.
-;;;
-;;; For colon words it usually points to itc_nest which pushes
-;;; the current IP onto the stack so we can resume later.
-;;;
-;;; Minor detail: since code words may call functions we have
-;;;   ensured that that RSP is 16-byte aligned before runining
-;;    our inner interpreter.
-;;;
-;;; READERS: who somehow found themselves here, and want to
-;;;   look further, take a look at: https://muforth.dev/threaded-code/
+;;; This is similar to itc_collatz.asm but instead
+;;; we store the top of the stack in a register.
 
 ;;; For the ITC implementation we have:
 ; R12: IP               ; the next word to execute
-; R13: data SP
+; R13: data SP          ; Except TOS
 ; R14: return SP
 ; R15: work pointer     ; the currently executing word
+; RBX: TOS (top of stack)
 
 global main
 extern printf, fprintf, malloc, strtoll
@@ -51,7 +36,8 @@ main:
     push r13
     push r14
     push r15
-    sub rsp, 40
+    push rbx
+    sub rsp, 32
 
     ; Require single argument
     cmp ecx, 2
@@ -91,10 +77,8 @@ main:
     add r14, 4096
 
     ; Put initial command argument onto data stack
-    mov rax, qword [rsp+32]
-    sub r13, 8
-    mov [r13], rax ; SP = [ INIT_INT ]
-
+    mov rbx, qword [rsp+32]
+    
     ; Setup return address target on return stack
     sub r14, 8
     lea rax, [rel .exit]
@@ -123,7 +107,8 @@ main:
     mov rax, 0
     jmp .epilog ; Could fall through instead...
 .epilog:
-    add rsp, 40
+    add rsp, 32
+    pop rbx
     pop r15
     pop r14
     pop r13
@@ -166,7 +151,8 @@ branch: code_word
 align 16
 ; ( b -- )  also known as 0branch
 zero_branch: code_word
-    mov rax, [r13]
+    mov rax, rbx
+    mov rbx, [r13]
     add r13, 8
     test rax, rax
     jnz .skip
@@ -181,47 +167,45 @@ zero_branch: code_word
 
 ; ( x -- x x)
 dup: code_word
-    mov rax, [r13]
     sub r13, 8
-    mov [r13], rax
+    mov [r13], rbx
     itc_next
 ; ( x y -- y x)
 swap: code_word
-    mov rax, [r13]
-    mov rcx, [r13+8]
-    mov [r13], rcx
-    mov [r13+8], rax
+    mov rax, rbx
+    mov rbx, [r13]
+    mov [r13], rax
     itc_next
 ; ( x y -- x y x)
 over: code_word
     sub r13, 8
-    mov rax, [r13+16]
-    mov [r13], rax
+    mov [r13], rbx
+    mov rbx, [r13+8]
     itc_next
 
 ; ( x -- )
 drop: code_word
+    mov rbx, [r13]
     add r13, 8
     itc_next
 
 ; ( -- x)
 push_word: code_word
-    mov rax, [r12]
-    add r12, 8
     sub r13, 8
-    mov [r13], rax
+    mov [r13], rbx
+    mov rbx, [r12]
+    add r12, 8
     itc_next
 
 ; ( x y -- x==y )
 op_equal: code_word
-    mov rax, [r13+8]
-    mov rcx, [r13]
+    mov rax, [r13]
     add r13, 8
-    cmp rax, rcx
+    cmp rax, rbx
     sete al
     neg al
     sbb rax, rax
-    mov [r13], rax
+    mov rbx, rax
     itc_next
 
 ;;; Math / comparisons
@@ -230,58 +214,57 @@ op_equal: code_word
 int_add: code_word
     mov rax, [r13]
     add r13, 8
-    add [r13], rax
+    add rbx, rax
     itc_next 
 ; ( a b -- a-b)
 int_sub: code_word
-    mov rax, [r13]
+    mov rax, rbx
+    mov rbx, [r13]
     add r13, 8
-    sub [r13], rax
+    sub rbx, rax
     itc_next 
 ; ( a, b -- a*b)
 int_mul: code_word
-    mov rax, [r13+8]
-    imul rax, [r13]
+    mov rax, [r13]
     add r13, 8
-    mov [r13], rax
+    imul rbx, rax
     itc_next
 
 
 ; ( n -- b )
 int_is_even: code_word
-    mov rax, [r13]
-    and rax, 0x01
-    xor rax, 1
-    mov [r13], rax
+    and rbx, 0x01
+    xor rbx, 1
     itc_next
 
 ; ( a b -- a/b )
 int_divide: code_word
-    mov rdx, 0
-    mov rax, [r13+8]
-    mov rcx, [r13]
-    idiv rcx
+    mov rax, [r13]
     add r13, 8
-    mov [r13], rax
+    xor rdx, rdx
+    idiv rbx
+    mov rbx, rax
     itc_next
 
 ; I/O
 
 ; ( x y format-str -- )
 print_two_args: code_word
-    mov rcx, [r13]
-    mov rdx, [r13+16]
-    mov r8, [r13+8]
-    add r13, 24
+    mov rcx, rbx
+    mov rdx, [r13+8]
+    mov r8, [r13]
     call printf
+    mov rbx, [r13+16]
+    add r13, 24
     itc_next
 
 ; ( x format-str -- )
 print_single_arg: code_word
-    mov rcx, [r13]
-    mov rdx, [r13+8]
-    add r13, 16
+    mov rcx, rbx
+    mov rdx, [r13]
     call printf
+    mov rbx, [r13+8]
+    add r13, 16
     itc_next
 
 ;;; Collatz
