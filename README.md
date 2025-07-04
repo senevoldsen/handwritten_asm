@@ -13,17 +13,12 @@ Does not use C Runtime
 
 Location: src/win64/find_ip
 
-## itc_collatz
+## Threaded Collatz sequence
 
-Demonstration of indirect threaded "forth-like" code.
-Outputs the collatz sequence of numbers starting with
-command line input.
-Does not include live compilation.
+Demonstration of computing the Collatz sequence using
+threaded "forth-like" code. There is no "live compilation"
+of new words here though.
 
-Location: src/win64/itc_collatz
-
-## itc_collatz_reg
-
-Similar to `itc_collatz` but uses a register for top of data stack.
-
-Location: src/win64/itc_collatz_reg
+- `src/win64/itc_collatz.asm`: Indirect-threaded
+- `src/win64/itc_collatz_reg.asm`: Indirect-threaded with top-of-stack in register
+- `src/win64/dtc_collatz_reg.asm`: Direct-threaded with top-of-stack in register
